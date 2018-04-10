@@ -1,3 +1,3 @@
-# PanasonicEasyIPsetupNIO
+# Panasonic EasyIPsetup NIO
 
-A description of this package.
+A framework to manage Panasonic Camera's Network configurations using Swift-NIO.

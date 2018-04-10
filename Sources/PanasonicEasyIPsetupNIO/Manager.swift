@@ -10,6 +10,7 @@ import PanasonicEasyIPsetupCore
 import NetUtils
 
 private let 🔂 = MultiThreadedEventLoopGroup(numThreads: 1)
+let cameraBroadcast = try! SocketAddress(ipAddress: "255.255.255.255", port: 10670)
 
 public class Manager {
 	
@@ -42,10 +43,26 @@ public class Manager {
 		}
 	}
 	
-	func searchCameras() {
+	public func searchCameras() {
 		foundCameras.removeAll(keepingCapacity: true)
 		communicationChannel.whenSuccess{
 			Manager.sendDiscoveryRequest(on: $0)
+		}
+	}
+	
+	public func set(configuration: CameraConfiguration) {
+		let address = Interface.allInterfaces()
+			.filter {$0.family == .ipv4 && $0.broadcastAddress != nil}
+			.compactMap { $0.addressBytes }
+			.first ?? [10, 1, 0, 5]
+		let request = configuration.reconfigurationRequest(sourceMacAddress: [2,0,0,0,0,0], sourceIpAddress: address)
+		communicationChannel.whenSuccess{
+			var buffer = $0.allocator.buffer(capacity: request.count)
+			buffer.write(bytes: request)
+			$0.writeAndFlush(AddressedEnvelope(remoteAddress: cameraBroadcast, data: buffer))
+				.whenFailure { error in
+					print(error)
+				}
 		}
 	}
 	
@@ -56,15 +73,13 @@ public class Manager {
 			.filter {$0.family == .ipv4 && $0.broadcastAddress != nil}
 			.compactMap { $0.addressBytes }
 		
-		let destination = try! SocketAddress(ipAddress: "255.255.255.255", port: 10670)
-		
 		for address in addresses {
 			let request = CameraConfiguration.discoveryRequest(from: [2,0,0,0,0,0], ipV4address: address)
 			var buffer = channel.allocator.buffer(capacity: request.count)
 			buffer.write(bytes: request)
 			let write = channel.write(
 				AddressedEnvelope(
-					remoteAddress: destination,
+					remoteAddress: cameraBroadcast,
 					data: buffer
 				)
 			)
